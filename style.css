@@ -155,23 +155,29 @@ pre {
 
 @media only screen and (max-width: 600px) {
   #micBtn {
-    font-size: 30px;
+    font-size: 27px;
     border-radius: 50px;
     cursor: pointer;
-    padding: 20px;
+    padding: 13px;
     margin-left: 5px;
     margin-right: 5px;
   }
   #finalizarBtn {
-    font-size: 27px;
+    font-size: 24px;
     border-radius: 50px;
     cursor: pointer;
-    padding: 15px;
+    padding: 12px;
     margin-left: 5px;
     margin-right: 5px;
   }
   #proximoBtn {
     width: 75%;
+  }
+  #micBtn.listening {
+    background: red;
+    padding: 8px;
+    padding-top: 9px;
+    padding-bottom: 10px;
   }
 
 }
