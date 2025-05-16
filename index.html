@@ -1,0 +1,285 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <title>Robô Médico – Prototipo Gemini</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <!-- three.js not necessário nesta versão; usamos imagem estática -->
+  <link rel="stylesheet" href="style.css">
+  <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script> <!-- Convete MArkdown -->
+</head>
+<body>
+  <div id="stage">
+    <img id="robot-img" src="robo.png" alt="Robô Médico" />
+    <div id="mouth"></div>
+  </div>
+  <div id="controls">
+    <button id="micBtn">🎤 Falar</button>
+    <button id="finalizarBtn"
+            style="margin-left:1rem;background:green;color:#fff;padding:0.6rem 1rem;
+                  border:none;border-radius:8px;cursor:pointer;">
+        ✅ Finalizar
+    </button>
+  </div>
+  <div id="resumoFinal" style="width: 90%; max-width: 800px; background: #e0f7fa; border-radius: 12px; padding: 1rem; margin-top: 1rem;">
+    <h2>Resumo Estruturado</h2>
+    <div id="resumoTexto"></div>
+    <div id="botaoProximo"><button id="proximoBtn" style="display: none;">Próxima página</button></div>
+  </div>
+  <div id="summary">
+    <h2>Resumo da Interação</h2>
+    </div>
+  <div id="startScreen">
+  <button id="startBtn">
+    👉 Clique aqui para começar
+  </button>
+  </div>
+
+  <!-- Google Generative AI SDK via esm.run CDN.   -->
+  <script type="module">
+    import { GoogleGenerativeAI } from "https://esm.run/@google/generative-ai";
+
+    let API_KEY = localStorage.getItem("API_KEY");
+    if (!API_KEY) {
+       API_KEY = window.prompt("Digite a KEY");
+       if (API_KEY) {
+        localStorage.setItem("API_KEY", API_KEY);
+      } else {
+        alert("Nenhuma chave foi informada.");
+      }
+    }
+    const MODEL_NAME = "gemini-1.5-flash";
+
+    const genAI = new GoogleGenerativeAI(API_KEY);
+    const model = genAI.getGenerativeModel({ model: MODEL_NAME });
+    let chatHistory = [];
+    const mouthEl = document.getElementById("mouth");
+    const summaryEl = document.getElementById("summary");
+    const micBtn = document.getElementById("micBtn");
+    //const anamneseDiv = document.getElementById("anamnese");
+
+    let selectedVoice = null;
+    let isListening = false;
+    let recognition = null;
+    let capturedText = "";
+
+
+//    const resumo = {
+//     queixa: "",
+//      hda: "",
+//     antecedentes: "",
+//      alergias: "",
+//      medicacoes: "",
+//      outros: ""
+//    };
+//    const etapas = Object.keys(resumo);
+//    let etapaAtual = 0;
+
+//    function atualizarAnamnese() {
+//      anamneseDiv.innerHTML = `<pre>${JSON.stringify(resumo, null, 2)}</pre>`;
+//    }
+
+    function getBestVoice() {
+      const voices = speechSynthesis.getVoices();
+      const maria = voices.find(v => v.name.toLowerCase().includes("maria") && v.lang === "pt-BR");
+      return maria || voices.find(v => v.lang === "pt-BR");
+    }
+
+    speechSynthesis.onvoiceschanged = () => {
+      selectedVoice = getBestVoice();
+    };
+
+    function speak(text) {
+      return new Promise((resolve) => {
+        const utter = new SpeechSynthesisUtterance(text);
+        utter.lang = "pt-BR";
+        utter.voice = selectedVoice;
+        utter.rate = 1;
+        utter.onboundary = () => {
+          mouthEl.classList.add("open");
+          setTimeout(() => mouthEl.classList.remove("open"), 120);
+        };
+        utter.onend = () => {
+          mouthEl.classList.remove("open");
+          resolve();
+        };
+        speechSynthesis.speak(utter);
+      });
+    }
+
+    function listen() {
+      return new Promise((resolve, reject) => {
+        const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+        if (!SpeechRecognition) {
+          alert("Este navegador não suporta Web Speech API");
+          return reject();
+        }
+        recognition = new SpeechRecognition();
+        recognition.lang = "pt-BR";
+        recognition.interimResults = false;
+        recognition.maxAlternatives = 1;
+        recognition.onresult = (evt) => {
+          const transcript = evt.results[0][0].transcript.trim();
+          resolve(transcript);
+        };
+        recognition.onerror = (e) => reject(e);
+        recognition.start();
+      });
+    }
+
+    function addMessage(text, from) {
+      const p = document.createElement("p");
+      p.className = `msg ${from}`;
+      p.textContent = `${from === "user" ? "Paciente:" : "Robô:"} ${text}`;
+      summaryEl.appendChild(p);
+      summaryEl.scrollTop = summaryEl.scrollHeight;
+    }
+
+    async function askGemini(question) {
+      const systemInstructionText = "Você é um robô médico simpático que realiza anamneses em português com linguagem simples e acolhedora. Comece com uma saudação se apresentando como um robô de triagem para ajudar seu médico. Diga para o usuario clicar no botão falar para te responder. Depois siga fazendo perguntas médicas como em uma pré-consulta em pronto atendimento. Sua linguagem deve ser clara, simpática e objetiva. Faça apenas UMA pergunta por vez. Após a resposta, espere pela próxima interação antes de continuar.  Siga o padrão da anamnese médica: identifique a queixa principal e sua duração, inicie perguntas abertas sobre o início. Depois tente determinar com maior precisão o início e a duração. Colha informações a respeito da queixa principal com relação localização e evolução dos sintomas. Questione sobre antecedentes médicos, uso de medicações para o evento atual e medicamentos no dia a dia. Confirme mais uma vez sobre as medicações de uso diário. Questione de alergias e antecedentes medicamentosos. Não faça diagnóstico, apenas colete dados. Evite linguagem técnica. Responda em texto simples sem marcações";
+
+      const conversationHistory = [
+        ...chatHistory.map((m) => ({
+          role: m.role,
+          parts: [{ text: m.content }]
+        })),
+        {
+          role: "user",
+          parts: [{ text: question }]
+        }
+      ];
+
+      const requestPayload = {
+        contents: conversationHistory,
+        systemInstruction: {
+          parts: [{ text: systemInstructionText }]
+        },
+        generationConfig: {
+          maxOutputTokens: chatHistory.length <= 1 ? 120 : 50
+        }
+      };
+
+      const result = await model.generateContent(requestPayload);
+      return result.response.text();
+    }
+
+    async function toggleListen() {
+      try {
+        /* ─────── INICIAR ESCUTA CONTÍNUA ─────── */
+        if (!isListening) {
+          isListening = true;
+          micBtn.classList.add("listening");
+          micBtn.textContent = "🔴 Ouvindo";
+          capturedText = "";
+          speechSynthesis.cancel();  // interrompe fala imediatamente
+          // feedback sonoro curto, sem bloquear
+          //speak("Hum...");
+
+          // cria reconhecimento contínuo
+          recognition = new (window.SpeechRecognition || window.webkitSpeechRecognition)();
+          recognition.lang = "pt-BR";
+          recognition.continuous = true;
+          recognition.interimResults = false;
+
+          recognition.onresult = (evt) => {
+            for (let i = 0; i < evt.results.length; i++) {
+              if (evt.results[i].isFinal) {
+                capturedText += " " + evt.results[i][0].transcript.trim();
+              }
+            }
+          };
+
+          recognition.onend = async () => {
+            // só processa se foi parado pelo usuário e há texto capturado
+            if (!isListening && capturedText.trim()) {
+              const userText = capturedText.trim();
+              addMessage(userText, "user");
+              chatHistory.push({ role: "user", content: userText });
+
+              const gptText = await askGemini(userText);
+              addMessage(gptText, "bot");
+              chatHistory.push({ role: "model", content: gptText });
+              await speak(gptText);
+            }
+          };
+
+          recognition.start();
+        }
+        /* ─────── PARAR ESCUTA ─────── */
+        else {
+          recognition?.stop();          // dispara onend → gera resposta
+          isListening = false;
+          micBtn.classList.remove("listening");
+          micBtn.textContent = "🎤 Falar";
+        }
+      } catch (err) {
+        console.error(err);
+        alert("Erro: " + err.message);
+        isListening = false;
+        micBtn.classList.remove("listening");
+        micBtn.textContent = "🎤 Falar";
+      }
+    }
+    document.getElementById("startBtn").addEventListener("click", async () => {
+    // Oculta o botão de início
+    document.getElementById("startScreen").style.display = "none";
+    // Garante que as vozes carregaram
+    await new Promise(resolve => {
+        if (speechSynthesis.getVoices().length > 0) return resolve();
+        speechSynthesis.onvoiceschanged = () => resolve();
+    });
+
+    // Prompt do nome
+    const nomePaciente = window.prompt("Olá! Qual é o seu nome?");
+    if (nomePaciente) {
+        const saudacao = `Olá, meu nome é ${nomePaciente}.`;
+        addMessage(saudacao, "user");
+        chatHistory.push({ role: "user", content: saudacao });
+        localStorage.setItem("Nome", nomePaciente);
+
+        const resposta = await askGemini(saudacao);
+        addMessage(resposta, "bot");
+        chatHistory.push({ role: "model", content: resposta });
+        await speak(resposta);
+    }
+    });
+
+    micBtn.addEventListener("click", toggleListen);
+
+    const btnFinalizar = document.getElementById("finalizarBtn");
+    const resumoTextoDiv = document.getElementById("resumoTexto");
+
+    // GERAR RESUMO ESTRUTURADO
+    async function gerarResumoEstruturado() {
+    speechSynthesis.cancel();  // interrompe fala imediatamente
+    const promptResumo = `Abaixo está o histórico completo de uma entrevista médica feita por um robô:
+
+    ${chatHistory.map(m => `${m.role === "user" ? "Paciente" : "Robô"}: ${m.content}`).join("\n")}
+
+    Com base nessa conversa, gere um resumo estruturado em texto simples com os seguintes campos:
+
+    - Queixa principal e duração:
+    - História da Moléstia Atual:
+    - Antecedentes:
+    - Alergias:
+    - Medicações em uso:
+
+    Responda apenas com os campos e o conteúdo correspondente.`;
+
+    const result = await model.generateContent({
+        contents: [{ role: "user", parts: [{ text: promptResumo }] }]
+    });
+    let markdownTexto = result.response.text()
+    let textoArrumado = marked.parse(markdownTexto);
+    localStorage.setItem("Resumo", markdownTexto);
+    resumoTextoDiv.innerHTML = textoArrumado;
+    document.getElementById("proximoBtn").style.display = "inline-block"; // ou "block" conforme o layout
+    }
+    // GERAR RESUMO ESTRUTURADO
+    btnFinalizar.addEventListener("click", gerarResumoEstruturado);
+    document.getElementById("proximoBtn").addEventListener("click", () => {
+    window.location.href = "/index2.html";
+    });
+  </script>
+</body>
+</html>
