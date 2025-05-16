@@ -60,10 +60,13 @@ body {
     font-size: 1rem;
     border-radius: 999px;
     cursor: pointer;
+    margin-left:1rem;
+    margin-right: 2rem;
 }
 
 #finalizarBtn {
     margin-left:1rem;
+    margin-right: 2rem;
     background:green;
     color:#fff;
     padding:0.6rem 1rem;
@@ -88,6 +91,8 @@ body {
 }
 #summary h2 {
     margin-top: 0;
+    font-size: 24px;
+    color: #04346f;
 }
 
 #resumoFinal {
@@ -154,12 +159,19 @@ pre {
     border-radius: 50px;
     cursor: pointer;
     padding: 20px;
+    margin-left: 5px;
+    margin-right: 5px;
   }
   #finalizarBtn {
     font-size: 27px;
     border-radius: 50px;
     cursor: pointer;
     padding: 15px;
+    margin-left: 5px;
+    margin-right: 5px;
+  }
+  #proximoBtn {
+    width: 75%;
   }
 
 }

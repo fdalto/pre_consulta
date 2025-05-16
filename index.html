@@ -14,11 +14,11 @@
     <div id="mouth"></div>
   </div>
   <div id="controls">
+    <button id="finalizarBtn" style="display: none;">✅ Finalizar</button>
     <button id="micBtn">🎤 Falar</button>
-    <button id="finalizarBtn">✅ Finalizar</button>
   </div>
-  <div id="resumoFinal">
-    <h2>Resumo Estruturado</h2>
+  <div id="resumoFinal" style="display: none;">
+    <h2>Histórico de conversa</h2>
     <div id="resumoTexto"></div>
     <div id="botaoProximo"><button id="proximoBtn" style="display: none;">Próxima página</button></div>
   </div>
@@ -52,28 +52,21 @@
     const mouthEl = document.getElementById("mouth");
     const summaryEl = document.getElementById("summary");
     const micBtn = document.getElementById("micBtn");
-    //const anamneseDiv = document.getElementById("anamnese");
-
+    
     let selectedVoice = null;
     let isListening = false;
     let recognition = null;
     let capturedText = "";
+    let contador = 0
 
-
-//    const resumo = {
-//     queixa: "",
-//      hda: "",
-//     antecedentes: "",
-//      alergias: "",
-//      medicacoes: "",
-//      outros: ""
-//    };
-//    const etapas = Object.keys(resumo);
-//    let etapaAtual = 0;
-
-//    function atualizarAnamnese() {
-//      anamneseDiv.innerHTML = `<pre>${JSON.stringify(resumo, null, 2)}</pre>`;
-//    }
+    function checarContador() {
+      if (contador > 3) {
+      document.getElementById("finalizarBtn").style.display = "inline-block"; // VOLTA A APARECER A DIV
+      console.log('Contador é maior que 3!');
+      } else {
+        console.log('Contador não ultrapassou 3.');
+      }
+    }
 
     function getBestVoice() {
       const voices = speechSynthesis.getVoices();
@@ -156,6 +149,8 @@
       };
 
       const result = await model.generateContent(requestPayload);
+      contador = contador + 1
+      checarContador()
       return result.response.text();
     }
 
@@ -248,6 +243,7 @@
     // GERAR RESUMO ESTRUTURADO
     async function gerarResumoEstruturado() {
     speechSynthesis.cancel();  // interrompe fala imediatamente
+    document.getElementById("resumoFinal").style.display = "inline-block"; // VOLTA A APARECER A DIV
     const promptResumo = `Abaixo está o histórico completo de uma entrevista médica feita por um robô:
 
     ${chatHistory.map(m => `${m.role === "user" ? "Paciente" : "Robô"}: ${m.content}`).join("\n")}
@@ -270,11 +266,12 @@
     localStorage.setItem("Resumo", markdownTexto);
     resumoTextoDiv.innerHTML = textoArrumado;
     document.getElementById("proximoBtn").style.display = "inline-block"; // ou "block" conforme o layout
+    document.getElementById("resumoFinal").style.display = "inline-block"; // ou "block" conforme o layout
     }
     // GERAR RESUMO ESTRUTURADO
     btnFinalizar.addEventListener("click", gerarResumoEstruturado);
     document.getElementById("proximoBtn").addEventListener("click", () => {
-    window.location.href = "index2.html";
+    window.location.href = "index3.html";
     });
   </script>
 </body>

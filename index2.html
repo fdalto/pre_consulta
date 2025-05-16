@@ -14,10 +14,10 @@
     <div id="mouth"></div>
   </div>
   <div id="controls">
+    <button id="finalizarBtn" style="display: none;">✅ Finalizar</button>
     <button id="micBtn">🎤 Falar</button>
-    <button id="finalizarBtn">✅ Finalizar</button>
   </div>
-  <div id="resumoFinal">
+  <div id="resumoFinal" style="display: none;">
     <h2>Resumo Estruturado</h2>
     <div id="resumoTexto"></div>
     <div id="botaoProximo"><button id="proximoBtn" style="display: none;">Próxima página</button></div> 
@@ -62,7 +62,16 @@
     let isListening = false;
     let recognition = null;
     let capturedText = "";
+    let contador = 0
 
+    function checarContador() {
+      if (contador > 3) {
+      document.getElementById("finalizarBtn").style.display = "inline-block"; // VOLTA A APARECER A DIV
+      console.log('Contador é maior que 3!');
+      } else {
+        console.log('Contador não ultrapassou 3.');
+      }
+    }
 
     function getBestVoice() {
       const voices = speechSynthesis.getVoices();
@@ -145,6 +154,8 @@
       };
 
       const result = await model.generateContent(requestPayload);
+      contador = contador + 1
+      checarContador()
       return result.response.text();
     }
 
@@ -231,7 +242,8 @@
     // GERAR NOVO RESUMO ESTRUTURADO
     async function gerarResumoEstruturado() {
     speechSynthesis.cancel();  // interrompe fala imediatamente
-      const promptResumo = `Abaixo está o histórico completo de uma entrevista médica feita por um robô:
+    document.getElementById("resumoFinal").style.display = "inline-block"; // VOLTA A APARECER A DIV
+    const promptResumo = `Abaixo está o histórico completo de uma entrevista médica feita por um robô:
 
     ${chatHistory.map(m => `${m.role === "user" ? "Paciente" : "Robô"}: ${m.content}`).join("\n")}
 
@@ -244,7 +256,7 @@
     - Medicações em uso:
     - Hipósteses diagnósticas:
 
-    Responda apenas com os campos e o conteúdo correspondente. No campo de "Hipósteses diagnósticas" você deve listar apenas as 3 mais prováveis em ordem de probabilidade. Para cada hipótese cite alguma manobra ou teste de exame físico médico que pode ajudar na confirmação. Inclua também uma explicação de qual resultado corrobora e qual afasta essa hipótese para cada teste.`;
+    Responda apenas com os campos e o conteúdo correspondente. No campo de "Hipósteses diagnósticas" você deve listar apenas as 3 mais prováveis hipóteses em ordem de probabilidade. Para cada hipótese cite alguma manobra ou teste de exame físico médico que pode ajudar na confirmação. Inclua também uma explicação de qual resultado esperado desta manobra citada corrobora com o diagnótsico e qual resultado da manobra afasta essa hipótese, para cada teste.`;
 
     const result = await model.generateContent({
         contents: [{ role: "user", parts: [{ text: promptResumo }] }]
@@ -254,11 +266,12 @@
     localStorage.setItem("Resumo2", markdownTexto);
     resumoTextoDiv.innerHTML = textoArrumado;
     document.getElementById("proximoBtn").style.display = "inline-block"; // ou "block" conforme o layout
+    document.getElementById("resumoFinal").style.display = "inline-block"; // ou "block" conforme o layout
     }
     // GERAR RESUMO ESTRUTURADO
     btnFinalizar.addEventListener("click", gerarResumoEstruturado);
     document.getElementById("proximoBtn").addEventListener("click", () => {
-    window.location.href = "/index2.html";
+    window.location.href = "index2.html";
     });
   </script>
 </body>
