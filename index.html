@@ -15,13 +15,9 @@
   </div>
   <div id="controls">
     <button id="micBtn">🎤 Falar</button>
-    <button id="finalizarBtn"
-            style="margin-left:1rem;background:green;color:#fff;padding:0.6rem 1rem;
-                  border:none;border-radius:8px;cursor:pointer;">
-        ✅ Finalizar
-    </button>
+    <button id="finalizarBtn">✅ Finalizar</button>
   </div>
-  <div id="resumoFinal" style="width: 90%; max-width: 800px; background: #e0f7fa; border-radius: 12px; padding: 1rem; margin-top: 1rem;">
+  <div id="resumoFinal">
     <h2>Resumo Estruturado</h2>
     <div id="resumoTexto"></div>
     <div id="botaoProximo"><button id="proximoBtn" style="display: none;">Próxima página</button></div>
@@ -278,7 +274,7 @@
     // GERAR RESUMO ESTRUTURADO
     btnFinalizar.addEventListener("click", gerarResumoEstruturado);
     document.getElementById("proximoBtn").addEventListener("click", () => {
-    window.location.href = "/index2.html";
+    window.location.href = "index2.html";
     });
   </script>
 </body>
