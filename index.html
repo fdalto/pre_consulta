@@ -55,6 +55,7 @@
     
     let selectedVoice = null;
     let isListening = false;
+    let stopRequested = false;
     let recognition = null;
     let capturedText = "";
     let contador = 0
@@ -156,17 +157,15 @@
 
     async function toggleListen() {
       try {
-        /* ─────── INICIAR ESCUTA CONTÍNUA ─────── */
         if (!isListening) {
+          // Inicia gravação contínua
           isListening = true;
+          stopRequested = false;
           micBtn.classList.add("listening");
           micBtn.textContent = "🔴 Ouvindo";
           capturedText = "";
-          speechSynthesis.cancel();  // interrompe fala imediatamente
-          // feedback sonoro curto, sem bloquear
-          //speak("Hum...");
+          speechSynthesis.cancel();
 
-          // cria reconhecimento contínuo
           recognition = new (window.SpeechRecognition || window.webkitSpeechRecognition)();
           recognition.lang = "pt-BR";
           recognition.continuous = true;
@@ -181,27 +180,30 @@
           };
 
           recognition.onend = async () => {
-            if (isListening) {
-              // Reinicia automaticamente em mobile/PC enquanto estiver ouvindo
+            if (!stopRequested) {
+              // Parada involuntária (mobile pause): reinicia
               recognition.start();
-            } else if (capturedText.trim()) {
-              // Processa apenas quando o usuário parou a gravação
-              const userText = capturedText.trim();
-              addMessage(userText, "user");
-              chatHistory.push({ role: "user", content: userText });
+            } else {
+              // Parada pelo usuário: processa texto
+              stopRequested = false;
+              if (capturedText.trim()) {
+                const userText = capturedText.trim();
+                addMessage(userText, "user");
+                chatHistory.push({ role: "user", content: userText });
 
-              const gptText = await askGemini(userText);
-              addMessage(gptText, "bot");
-              chatHistory.push({ role: "model", content: gptText });
-              await speak(gptText);
+                const gptText = await askGemini(userText);
+                addMessage(gptText, "bot");
+                chatHistory.push({ role: "model", content: gptText });
+                await speak(gptText);
+              }
             }
           };
 
           recognition.start();
-        }
-        /* ─────── PARAR ESCUTA ─────── */
-        else {
-          recognition?.stop();          // dispara onend → gera resposta
+        } else {
+          // Usuário solicita parar
+          stopRequested = true;
+          recognition.stop();       // vai disparar onend
           isListening = false;
           micBtn.classList.remove("listening");
           micBtn.textContent = "🎤 Falar";
@@ -209,6 +211,7 @@
       } catch (err) {
         console.error(err);
         alert("Erro: " + err.message);
+        stopRequested = false;
         isListening = false;
         micBtn.classList.remove("listening");
         micBtn.textContent = "🎤 Falar";
@@ -274,7 +277,7 @@
     // GERAR RESUMO ESTRUTURADO
     btnFinalizar.addEventListener("click", gerarResumoEstruturado);
     document.getElementById("proximoBtn").addEventListener("click", () => {
-    window.location.href = "index3.html";
+    window.location.href = "index2.html";
     });
   </script>
 </body>
