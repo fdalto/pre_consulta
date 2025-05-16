@@ -181,8 +181,11 @@
           };
 
           recognition.onend = async () => {
-            // só processa se foi parado pelo usuário e há texto capturado
-            if (!isListening && capturedText.trim()) {
+            if (isListening) {
+              // Reinicia automaticamente em mobile/PC enquanto estiver ouvindo
+              recognition.start();
+            } else if (capturedText.trim()) {
+              // Processa apenas quando o usuário parou a gravação
               const userText = capturedText.trim();
               addMessage(userText, "user");
               chatHistory.push({ role: "user", content: userText });
