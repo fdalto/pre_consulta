@@ -47,7 +47,10 @@
     const MODEL_NAME = "gemini-1.5-flash";
 
     //Carrega dados da conversa anterior
-    const idadePaciente = window.prompt("Qual s sua idade?");
+    const idadePaciente = window.prompt("Qual a sua idade?");
+    localStorage.setItem("idadePaciente", idadePaciente);
+    const sexoPaciente = window.prompt("Qual seu sexo biológico? (Feminino ou Masculino)");
+    localStorage.setItem("sexoPaciente", sexoPaciente);
     const nomePaciente = localStorage.getItem("Nome");
     const resumoAnamnese = localStorage.getItem("Resumo");
 
@@ -60,9 +63,11 @@
 
     let selectedVoice = null;
     let isListening = false;
+    let stopRequested = false;
     let recognition = null;
     let capturedText = "";
     let contador = 0
+    let hipotesesBackup = "";
 
     function checarContador() {
       if (contador > 3) {
@@ -130,7 +135,7 @@
     }
 
     async function askGemini(question) {
-      const systemInstructionText = `Resumo inicial do paciente ${nomePaciente} de ${idadePaciente} anos: ${resumoAnamnese}.<br>- Gere 3 hipóteses diagnósticas internas (não as exiba).<br>- Comece imediatamente com UMA pergunta objetiva, sem qualquer saudação, para tentar confirmar a 1ª hipótese. Siga realizando até 6 perguntas a fim de confirmar uma das hipóteses e excluir as demais. Sua linguagem deve ser clara, simpática e objetiva. Faça apenas UMA pergunta por vez. Após a resposta, espere pela próxima interação antes de continuar. Evite linguagem técnica. Responda em texto simples sem marcações`;
+      const systemInstructionText = `Resumo inicial do paciente ${nomePaciente} de ${idadePaciente} anos: ${resumoAnamnese}.<br>- Gere 3 hipóteses diagnósticas internas (não as exiba).<br>- Comece imediatamente com UMA pergunta objetiva, sem qualquer saudação, para tentar confirmar a 1ª hipótese. Siga realizando até 6 perguntas a fim de confirmar uma das hipóteses e excluir as demais. Sua linguagem deve ser clara, simpática e objetiva. Faça apenas UMA pergunta por vez. Após a resposta, espere pela próxima interação antes de continuar. Evite linguagem técnica. Responda em texto simples sem marcações. Caso chegue a uma conclusão diagnóstica não fale, apenas comunique que já tem dados suficientes.`;
 
       const conversationHistory = [
         ...chatHistory.map((m) => ({
@@ -164,13 +169,11 @@
         /* ─────── INICIAR ESCUTA CONTÍNUA ─────── */
         if (!isListening) {
           isListening = true;
+          stopRequested = false;
           micBtn.classList.add("listening");
           micBtn.textContent = "🔴 Ouvindo";
           capturedText = "";
           speechSynthesis.cancel();  // interrompe fala imediatamente
-          // feedback sonoro curto, sem bloquear
-          //speak("Hum...");
-
           // cria reconhecimento contínuo
           recognition = new (window.SpeechRecognition || window.webkitSpeechRecognition)();
           recognition.lang = "pt-BR";
@@ -186,24 +189,30 @@
           };
 
           recognition.onend = async () => {
-            // só processa se foi parado pelo usuário e há texto capturado
-            if (!isListening && capturedText.trim()) {
-              const userText = capturedText.trim();
-              addMessage(userText, "user");
-              chatHistory.push({ role: "user", content: userText });
+                        if (!stopRequested) {
+              // Parada involuntária (mobile pause): reinicia
+              recognition.start();
+            } else {
+              // Parada pelo usuário: processa texto
+              stopRequested = false;
+              if (capturedText.trim()) {
+                const userText = capturedText.trim();
+                addMessage(userText, "user");
+                chatHistory.push({ role: "user", content: userText });
 
-              const gptText = await askGemini(userText);
-              addMessage(gptText, "bot");
-              chatHistory.push({ role: "model", content: gptText });
-              await speak(gptText);
+                const gptText = await askGemini(userText);
+                addMessage(gptText, "bot");
+                chatHistory.push({ role: "model", content: gptText });
+                await speak(gptText);
+              }
             }
           };
 
           recognition.start();
-        }
-        /* ─────── PARAR ESCUTA ─────── */
-        else {
-          recognition?.stop();          // dispara onend → gera resposta
+        } else {
+          // Usuário solicita parar
+          stopRequested = true;
+          recognition.stop();       // vai disparar onend
           isListening = false;
           micBtn.classList.remove("listening");
           micBtn.textContent = "🎤 Falar";
@@ -211,15 +220,17 @@
       } catch (err) {
         console.error(err);
         alert("Erro: " + err.message);
+        stopRequested = false;
         isListening = false;
         micBtn.classList.remove("listening");
         micBtn.textContent = "🎤 Falar";
       }
     }
+    // INICIO DA AÇÃO PARA PAGINA 2
     document.getElementById("startBtn").addEventListener("click", async () => {
     // Oculta o botão de início
     document.getElementById("startScreen").style.display = "none";
-    const userText = "Vamos começar";
+        const userText = "Vamos começar";
     addMessage(userText, "user");
     chatHistory.push({ role: "user", content: userText });
     const gptText = await askGemini(userText);
@@ -241,37 +252,90 @@
 
     // GERAR NOVO RESUMO ESTRUTURADO
     async function gerarResumoEstruturado() {
-    speechSynthesis.cancel();  // interrompe fala imediatamente
-    document.getElementById("resumoFinal").style.display = "inline-block"; // VOLTA A APARECER A DIV
-    const promptResumo = `Abaixo está o histórico completo de uma entrevista médica feita por um robô:
+      speechSynthesis.cancel();  // interrompe fala imediatamente
+      document.getElementById("resumoFinal").style.display = "inline-block"; // VOLTA A APARECER A DIV
+      let ResumoAnterior = localStorage.getItem("Resumo");  // pega resumo anterior da memoria
+      const promptResumo = `Abaixo está o histórico completo de uma entrevista médica feita por um robô:
 
-    ${chatHistory.map(m => `${m.role === "user" ? "Paciente" : "Robô"}: ${m.content}`).join("\n")}
+      ${chatHistory.map(m => `${m.role === "user" ? "Paciente" : "Robô"}: ${m.content}`).join("\n")}
 
-    Com base nessa conversa, gere um resumo estruturado atualizado em texto simples com os seguintes campos:
+      Com base nessa conversa, atualize o resumo estruturado a seguir em texto simples:
+      ${ResumoAnterior}
 
-    - Queixa principal e duração:
-    - História da Moléstia Atual:
-    - Antecedentes:
-    - Alergias:
-    - Medicações em uso:
-    - Hipósteses diagnósticas:
+      Responda apenas com os campos do resumo estruturado e o conteúdo correspondente.`;
 
-    Responda apenas com os campos e o conteúdo correspondente. No campo de "Hipósteses diagnósticas" você deve listar apenas as 3 mais prováveis hipóteses em ordem de probabilidade. Para cada hipótese cite alguma manobra ou teste de exame físico médico que pode ajudar na confirmação. Inclua também uma explicação de qual resultado esperado desta manobra citada corrobora com o diagnótsico e qual resultado da manobra afasta essa hipótese, para cada teste.`;
-
-    const result = await model.generateContent({
-        contents: [{ role: "user", parts: [{ text: promptResumo }] }]
-    });
-    let markdownTexto = result.response.text()
-    let textoArrumado = marked.parse(markdownTexto);
-    localStorage.setItem("Resumo2", markdownTexto);
-    resumoTextoDiv.innerHTML = textoArrumado;
-    document.getElementById("proximoBtn").style.display = "inline-block"; // ou "block" conforme o layout
-    document.getElementById("resumoFinal").style.display = "inline-block"; // ou "block" conforme o layout
+      const result = await model.generateContent({
+          contents: [{ role: "user", parts: [{ text: promptResumo }] }]
+      });
+      let markdownTexto = result.response.text();
+      let textoArrumado = marked.parse(markdownTexto);
+      localStorage.setItem("Resumo2", markdownTexto);
+      resumoTextoDiv.innerHTML = textoArrumado;
+      document.getElementById("proximoBtn").style.display = "inline-block"; // ou "block" conforme o layout
+      document.getElementById("resumoFinal").style.display = "inline-block"; // ou "block" conforme o layout
+      // CRIA UMA DIV PRA RECEBER AS HIPOTESES
+      const novaDivHipoteses = document.createElement("div");
+      novaDivHipoteses.id = "hipotesesDiv";
+      novaDivHipoteses.textContent = "Hipóteses Diagnósticas prováveis pela História colhida:";
+      resumoTextoDiv.insertAdjacentElement("afterend", novaDivHipoteses);
+      const novaDivPropedeutica = document.createElement("div");
+      const novaDivHipoteses2 = document.getElementById("hipotesesDiv");
+      novaDivPropedeutica.id = "propedeuticaDiv";
+      novaDivPropedeutica.textContent = "Hipóteses Diagnósticas prováveis pela História colhida:";
+      novaDivHipoteses2.insertAdjacentElement("afterend", novaDivPropedeutica);
+      // CONCATENA COM A PROXIMA FUNÇÃO QUE É GERAR AS HIPÓTESES
+      gerarNovasHipoteses();
+      gerarPropedeutica();
     }
     // GERAR RESUMO ESTRUTURADO
     btnFinalizar.addEventListener("click", gerarResumoEstruturado);
+
+    // GERAR NOVAS HIPÓTESES
+    async function gerarNovasHipoteses() {
+      let novoResumo = localStorage.getItem("Resumo2");
+      const promptHipoteses = `Haja como um médico especialista. Abaixo está o resumo de uma anamnese médica, feita por um robô:
+      Idade do paciente: ${idadePaciente}
+      Sexo do paciente: ${sexoPaciente}
+      ${novoResumo}
+
+      Com base nestes dados anamnese, gere 3 Hipósteses diagnósticas.
+      Responda apenas com as hipóteses em ordem de probabilidade, da mais provável para menos provável.`;
+
+      const result2 = await model.generateContent({
+          contents: [{ role: "user", parts: [{ text: promptHipoteses }] }]
+      });
+      let markdownTexto2 = result2.response.text();
+      let textoArrumado2 = marked.parse(markdownTexto2);
+      localStorage.setItem("Hipoteses", markdownTexto2);
+      hipotesesBackup = markdownTexto2
+      let hipotesesDiv = document.getElementById("hipotesesDiv");
+      hipotesesDiv.innerHTML = textoArrumado2;
+    }
+    function esperar(ms) {
+      return new Promise(resolve => setTimeout(resolve, ms));
+    }
+    // GERAR PROPEDEUTICA
+    async function gerarPropedeutica() {
+      await esperar(100);
+      hipoteses = localStorage.getItem("Hipoteses");      
+      const promptPropedeutica = `Haja como um médico especialista. Abaixo estão 3 hipóteses diagnósticas elaboradas por uma entrevista médica:
+      ${hipoteses}
+      Para cada hipótese:
+      - cite 2 testes de exame físico médico usados na sua confirmação ou questões de anamnese pertinentes. 
+      - cite 1 exame complementar que pode ser usado na sua confirmação. Se não for necessário comente não ser necessário. 
+      Cite os achados esperados para estes exames serem considerados no contexto desta hipótese.
+      Responda apenas com texto.`;
+      const result3 = await model.generateContent({
+          contents: [{ role: "user", parts: [{ text: promptPropedeutica }] }]
+      });
+      let markdownTexto3 = result3.response.text();
+      let textoArrumado3 = marked.parse(markdownTexto3);
+      localStorage.setItem("Propedeutica", markdownTexto3);
+      let propedeuticaDiv = document.getElementById("propedeuticaDiv");
+      propedeuticaDiv.innerHTML = textoArrumado3;
+    }
     document.getElementById("proximoBtn").addEventListener("click", () => {
-    window.location.href = "index2.html";
+    window.location.href = "index3.html";
     });
   </script>
 </body>

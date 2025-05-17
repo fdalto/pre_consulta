@@ -59,6 +59,10 @@
     let recognition = null;
     let capturedText = "";
     let contador = 0
+    // COLOCAR AQUI PARA APAGAR O STORAGE QUANDO COMEÇA
+    localStorage.removeItem("Hipoteses");
+    localStorage.removeItem("Resumo");
+    localStorage.removeItem("Resumo2");
 
     function checarContador() {
       if (contador > 3) {
@@ -157,15 +161,15 @@
 
     async function toggleListen() {
       try {
+        /* ─────── INICIAR ESCUTA CONTÍNUA ─────── */
         if (!isListening) {
-          // Inicia gravação contínua
           isListening = true;
           stopRequested = false;
           micBtn.classList.add("listening");
           micBtn.textContent = "🔴 Ouvindo";
           capturedText = "";
-          speechSynthesis.cancel();
-
+          speechSynthesis.cancel();  // interrompe fala imediatamente
+          // cria reconhecimento contínuo
           recognition = new (window.SpeechRecognition || window.webkitSpeechRecognition)();
           recognition.lang = "pt-BR";
           recognition.continuous = true;

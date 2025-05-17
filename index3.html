@@ -1,0 +1,127 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <title>Robô Médico – Prototipo Gemini - Fase 3</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <!-- three.js not necessário nesta versão; usamos imagem estática -->
+  <link rel="stylesheet" href="style.css">
+  <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script> <!-- Convete MArkdown -->
+</head>
+<body>
+  <div id="stage">
+    <img id="robot-img" src="robo.png" alt="Robô Médico" />
+    <div id="mouth"></div>
+  </div>
+  <div id="resumoFinal">
+    <div id="anamneseDiv"></div>
+    <div id="hipotesesDiv"></div>
+    <div id="propedeuticaDiv"></div> 
+  </div>
+  <div id="summary">
+  </div>
+  <div id="startScreen">
+  <button id="startBtn">
+    👉 Clique aqui para começar
+  </button>
+  </div>
+
+  <!-- Google Generative AI SDK via esm.run CDN.   -->
+  <script type="module">
+    import { GoogleGenerativeAI } from "https://esm.run/@google/generative-ai";
+
+    let API_KEY = localStorage.getItem("API_KEY");
+    if (!API_KEY) {
+       API_KEY = window.prompt("Digite a KEY");
+       if (API_KEY) {
+        localStorage.setItem("API_KEY", API_KEY);
+      } else {
+        alert("Nenhuma chave foi informada.");
+      }
+    }
+    const MODEL_NAME = "gemini-1.5-flash";
+
+    //Carrega dados da conversa anterior
+    const nomePaciente = localStorage.getItem("Nome");
+    const resumoAnamnese2 = localStorage.getItem("Resumo2"); // ARRUMAR AQUI O QUE PRECISA
+    const hipotesesFase3 = localStorage.getItem("Hipoteses");
+    const propedeuticaFase3 = localStorage.getItem("Propedeutica");
+    const idadePaciente = localStorage.getItem("idadePaciente");
+    const sexoPaciente = localStorage.getItem("sexoPaciente");
+    let hipoteses = "";
+    let hipotesesBackup = hipotesesFase3;
+
+    //CARREGA ELEMENTOS DO SITE
+    const anamneseDiv = document.getElementById("anamneseDiv");
+
+    const genAI = new GoogleGenerativeAI(API_KEY);
+    const model = genAI.getGenerativeModel({ model: MODEL_NAME });
+    const mouthEl = document.getElementById("mouth");
+    const summaryEl = document.getElementById("summary");
+
+    function addMessage(text, from) {
+      const p = document.createElement("p");
+      p.className = `msg ${from}`;
+      p.textContent = `${from === "user" ? "Paciente:" : "Robô:"} ${text}`;
+      summaryEl.appendChild(p);
+      summaryEl.scrollTop = summaryEl.scrollHeight;
+    }
+
+    // GERAR NOVAS HIPÓTESES
+    async function gerarNovasHipoteses() {
+      let novoResumo = localStorage.getItem("Resumo2");
+      const promptHipoteses = `Haja como um médico especialista. Abaixo está o resumo de uma anamnese médica, feita por um robô:
+      Idade do paciente: ${idadePaciente}
+      Sexo do paciente: ${sexoPaciente}
+      ${novoResumo}
+
+      Com base nestes dados anamnese, gere 3 Hipósteses diagnósticas.
+      Responda apenas com as hipóteses em ordem de probabilidade, da mais provável para menos provável.`;
+
+      const result2 = await model.generateContent({
+          contents: [{ role: "user", parts: [{ text: promptHipoteses }] }]
+      });
+      let markdownTexto2 = result2.response.text();
+      let textoArrumado2 = marked.parse(markdownTexto2);
+      localStorage.setItem("Hipoteses", markdownTexto2);
+      hipotesesBackup = markdownTexto2
+      let hipotesesDiv = document.getElementById("hipotesesDiv");
+      hipotesesDiv.innerHTML = textoArrumado2;
+    }
+    function esperar(ms) {
+      return new Promise(resolve => setTimeout(resolve, ms));
+    }
+    // GERAR PROPEDEUTICA
+    async function gerarPropedeutica() {
+      await esperar(100);
+      hipoteses = localStorage.getItem("Hipoteses");      
+      const promptPropedeutica = `Haja como um médico especialista. Abaixo estão 3 hipóteses diagnósticas elaboradas por uma entrevista médica:
+      ${hipoteses}
+      Para cada hipótese:
+      - cite 2 testes de exame físico médico usados na sua confirmação ou questões de anamnese pertinentes. 
+      - cite 1 exame complementar que pode ser usado na sua confirmação. Se não for necessário comente não ser necessário. 
+      Cite os achados esperados para estes exames serem considerados no contexto desta hipótese.
+      Responda apenas com texto.`;
+      const result3 = await model.generateContent({
+          contents: [{ role: "user", parts: [{ text: promptPropedeutica }] }]
+      });
+      let markdownTexto3 = result3.response.text();
+      let textoArrumado3 = marked.parse(markdownTexto3);
+      localStorage.setItem("Propedeutica", markdownTexto3);
+      let propedeuticaDiv = document.getElementById("propedeuticaDiv");
+      propedeuticaDiv.innerHTML = textoArrumado3;
+    }
+ 
+    // INICIO DA AÇÃO PARA PAGINA 3
+    document.getElementById("startBtn").addEventListener("click", async () => {
+    // Oculta o botão de início
+    document.getElementById("startScreen").style.display = "none";
+    /// RODAR FUNÇÕES PARA PREENCHER A PAGINA 
+    let anamneseArrumado = marked.parse(resumoAnamnese2);
+    anamneseDiv.innerHTML = anamneseArrumado;
+    gerarNovasHipoteses()
+    gerarPropedeutica();
+    });
+  </script>
+</body>
+</html>
