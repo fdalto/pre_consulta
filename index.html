@@ -101,26 +101,6 @@
       });
     }
 
-    function listen() {
-      return new Promise((resolve, reject) => {
-        const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-        if (!SpeechRecognition) {
-          alert("Este navegador não suporta Web Speech API");
-          return reject();
-        }
-        recognition = new SpeechRecognition();
-        recognition.lang = "pt-BR";
-        recognition.interimResults = false;
-        recognition.maxAlternatives = 1;
-        recognition.onresult = (evt) => {
-          const transcript = evt.results[0][0].transcript.trim();
-          resolve(transcript);
-        };
-        recognition.onerror = (e) => reject(e);
-        recognition.start();
-      });
-    }
-
     function addMessage(text, from) {
       const p = document.createElement("p");
       p.className = `msg ${from}`;
@@ -160,6 +140,8 @@
     }
 
     async function toggleListen() {
+      const MAX_CHARS = 200;
+      const continuarTexto = "Tenho mais coisas para falar. Posso continuar?";
       try {
         /* ─────── INICIAR ESCUTA CONTÍNUA ─────── */
         if (!isListening) {
@@ -176,10 +158,20 @@
           recognition.interimResults = false;
 
           recognition.onresult = (evt) => {
-            for (let i = 0; i < evt.results.length; i++) {
+            // Para não duplicar, começamos em resultIndex
+            for (let i = evt.resultIndex; i < evt.results.length; i++) {
               if (evt.results[i].isFinal) {
-                capturedText += " " + evt.results[i][0].transcript.trim();
+                const chunk = evt.results[i][0].transcript.trim();
+                capturedText += (capturedText ? " " : "") + chunk;
+                console.log(`[DEBUG] Novo trecho: "${chunk}" → tamanho total = ${capturedText.length}`);
               }
+            }
+            // Depois de processar todo o resultado, checamos o limite
+            if (capturedText.length >= MAX_CHARS && !stopRequested) {
+              console.log("[DEBUG] Limite atingido, solicitando parada");
+              stopRequested = true;
+              capturedText += " " + continuarTexto;
+              recognition.stop();  // isso vai disparar onend
             }
           };
 
@@ -188,8 +180,12 @@
               // Parada involuntária (mobile pause): reinicia
               recognition.start();
             } else {
-              // Parada pelo usuário: processa texto
+              // Parada pelo usuário ou pelo excesso de palavras
               stopRequested = false;
+              isListening = false;
+              micBtn.classList.remove("listening");
+              micBtn.textContent = "🎤 Falar";
+
               if (capturedText.trim()) {
                 const userText = capturedText.trim();
                 addMessage(userText, "user");
